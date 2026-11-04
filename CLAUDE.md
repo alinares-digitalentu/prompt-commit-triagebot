@@ -40,3 +40,25 @@ pytest --cov=app
 ruff check .
 uvicorn app.main:app --reload
 ```
+
+## Convenciones del equipo (Spec-Driven)
+
+### Flujo de trabajo
+
+- `SPEC.md` es el contrato: léelo antes de implementar cualquier cosa.
+- Si lo que se pide contradice `SPEC.md`, para y pregunta. No decidas tú.
+- Trabaja siempre en una rama y entra en `main` por pull request. Nunca hagas push directo a `main`.
+- Commits pequeños, con el formato `tipo: descripción` (`feat:`, `fix:`, `docs:`, `test:`).
+
+### Verificación
+
+- Antes de dar una tarea por terminada, ejecuta `pytest -v` y `ruff check .`.
+- Los 5 tests de `tests/test_acceptance.py` deben pasar al final del proyecto.
+- Antes de instalar una dependencia, verifica que existe.
+
+### Estructura del código
+
+- Solo `app/classifier.py` llama al LLM. `classifier.py` no importa nada de FastAPI.
+- `app/main.py` define los endpoints, `app/models.py` los modelos Pydantic y `app/db.py` el acceso a SQLite.
+- Usa type hints y funciones cortas con una sola responsabilidad.
+- Toca solo los archivos que se pidan en la tarea.
