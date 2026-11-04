@@ -208,3 +208,101 @@ Los tests comprueban:
 - No propagar excepciones del SDK de la IA al endpoint.
 - No modificar los tests de aceptación para hacerlos pasar.
 - No introducir React ni frontend complejo.
+
+## 9. Decisiones de diseño del Equipo B
+
+### 9.1 Modelo de datos
+
+- **`title` y `description`:** se validan y se guardan **ya recortados** (trim). La longitud (1–200 y 1–5000) se mide después del trim. El contenido se guarda tal cual (emojis, saltos de línea y HTML incluidos) y se **escapa al renderizar** (autoescape de Jinja).
+- **`tags`:**
+  - Máximo **5** etiquetas, de 1 a 30 caracteres cada una.
+  - En minúsculas, sin espacios laterales, formato `kebab-case`, sin duplicados y conservando el orden.
+  - Si el LLM devuelve más de 5, se descartan las sobrantes. Las etiquetas vacías o que no sean texto se descartan.
+- **Fechas:** ISO 8601 en UTC con sufijo `Z` y precisión de segundos (`2026-06-29T09:30:00Z`).
+- **`updated_at`:** cambia solo cuando un `PATCH` modifica de verdad `status` o `priority`. Un `PATCH` que repite los valores actuales no lo toca.
+- **SQLite:**
+  - Tabla `tickets` con `id INTEGER PRIMARY KEY AUTOINCREMENT`.
+  - `tags` se guarda como texto JSON.
+  - Restricciones `CHECK` para `category`, `priority` y `status`.
+  - `created_at` y `updated_at` se guardan como texto ISO 8601.
+- **`DATABASE_URL`:** formato `sqlite:///ruta/al/fichero.db`. Valor por defecto: `sqlite:///./triagebot.db`. Se **lee en cada conexión**, no al importar el módulo, y la tabla se crea si no existe (`CREATE TABLE IF NOT EXISTS`).
+
+### 9.2 API HTTP
+
+**Formato de error.** Se usa el formato por defecto de FastAPI:
+
+- `404` → `{"detail": "Ticket not found"}`
+- `422` → `{"detail": [ ... ]}` (lista de errores de validación de Pydantic)
+
+**`GET /tickets`**
+
+- Orden: `created_at` descendente y, a igualdad, `id` descendente.
+- Sin paginación en esta versión.
+- Los filtros se combinan con **AND**.
+- Un valor de filtro fuera del enum devuelve `422` (no una lista vacía).
+
+**`GET /tickets/{ticket_id}`** (nuevo)
+
+- `200` con el ticket.
+- `404` si no existe.
+- `422` si el id no es un entero.
+
+**`PATCH /tickets/{ticket_id}`**
+
+- Admite `status`, `priority` o ambos. **Debe venir al menos uno**: `{}` devuelve `422`.
+- Cualquier otro campo (`title`, `category`, etc.) devuelve `422`, porque son inmutables.
+- Se puede reabrir un ticket cerrado (`closed` → `open`).
+- Orden de comprobación: `404` (el ticket no existe) antes que `422`.
+
+**Endpoints HTML para HTMX** (separados de la API JSON bajo el prefijo `/ui`, para que los endpoints JSON sigan devolviendo siempre JSON):
+
+| Endpoint | Devuelve |
+|---|---|
+| `GET /` | Página completa |
+| `GET /ui/tickets` | Fragmento `_tickets_table.html`, acepta `category`, `priority` y `status` |
+| `POST /ui/tickets` | Crea el ticket (formulario `application/x-www-form-urlencoded`) y devuelve el fragmento de la tabla |
+| `POST /ui/tickets/{ticket_id}` | Actualiza `status` y/o `priority` desde la tabla y devuelve el fragmento de la tabla |
+
+Los endpoints `/ui` responden siempre `200` con un fragmento HTML. Los errores de validación se muestran como mensaje dentro del fragmento.
+
+**Requisitos de implementación** (por cómo están escritos los tests):
+
+1. `main.py` llama a `classifier.classify_ticket(...)` **a través del módulo** (`from app import classifier`). Con `from app.classifier import classify_ticket` el parche de los tests no funcionaría.
+2. `main.py` envuelve esa llamada en `try/except Exception` y aplica el fallback si lanza. No basta con que el clasificador lo haga por dentro.
+3. `db.py` obtiene `DATABASE_URL` en cada conexión.
+
+### 9.3 Clasificador IA
+
+- **Salida del modelo:** se pide JSON estricto (`response_format={"type": "json_object"}`). Si la respuesta viene envuelta en un bloque de código (```` ``` ````), se retira la envoltura una vez antes de parsear.
+- **Validación:**
+  - `category` y `priority` deben coincidir **exactamente** con el enum, sin corregir mayúsculas. `"URGENT"` o una categoría inventada → fallback completo.
+  - `tags` debe ser una lista; si no lo es → fallback completo. Los elementos se normalizan según §9.1.
+- **Intentos:** como máximo 2 llamadas en total (1 inicial + 1 reintento), con timeout de 15 segundos cada una.
+  - Se reintenta ante excepción del SDK, timeout o respuesta que no es JSON.
+  - **No** se reintenta si el JSON es válido pero los valores no lo son: va directo al fallback.
+- **Sin `OPENROUTER_API_KEY`:** se devuelve el fallback sin llamar a la red y se registra un aviso.
+- **Fallback:** siempre una **copia nueva** de `{"category": "question", "priority": "P3", "tags": []}`, nunca el diccionario compartido.
+- **Prompt:**
+  - El contenido del ticket se envía delimitado y se indica al modelo que es **datos, no instrucciones**.
+  - Criterios: `urgent` si bloquea la operación o hay una fecha límite con impacto; `bug` para fallos de lo existente; `feature_request` para algo nuevo; `question` para dudas de uso.
+  - `P1`: impacto crítico inmediato. `P2`: importante pero no bloqueante. `P3`: bajo impacto.
+  - Etiquetas en inglés, `kebab-case`, de 0 a 5.
+- **Logging:** ante cualquier fallo se registra con `logging` el tipo de excepción y el motivo. No se registran la clave ni el contenido del ticket.
+- **Aislamiento:** `classifier.py` no importa nada de FastAPI y es el único módulo que usa el SDK de `openai`.
+
+### 9.4 Frontend
+
+Idioma de la interfaz: **español**. Estilos con Tailwind CDN y HTMX por CDN con versión fijada.
+
+**Pantalla única `GET /`**, con tres bloques:
+
+1. **Formulario de creación**
+   - Campo `title` (`maxlength=200`, obligatorio).
+   - Campo `description` (`maxlength=5000`, obligatorio).
+   - Botón «Crear ticket».
+2. **Filtros:** tres selectores (categoría, prioridad, estado), cada uno con la opción «Todas». Al cambiar uno se refresca la tabla sin recargar la página.
+3. **Tabla de tickets**
+   - Columnas: ID, Título, Categoría, Prioridad, Estado, Etiquetas, Creado.
+   - Prioridad y estado son selectores editables en la propia fila; al cambiarlos se guarda al instante.
+   - Orden: el más reciente primero.
+
