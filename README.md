@@ -96,6 +96,6 @@ Los detalles obligatorios están en:
 
 ## Equipo
 
-Nombres:Antonio
+Nombres: ANTONIO, FEDE
 
-Metodología: `Spec-Driven`
+Metodología: B (Spec-Driven)
