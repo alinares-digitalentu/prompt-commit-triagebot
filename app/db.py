@@ -1,9 +1,8 @@
-# TODO: implementa aquí la inicialización de SQLite y las operaciones de persistencia.
 import json
 import os
 import sqlite3
 from contextlib import closing
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 DEFAULT_DATABASE_URL = "sqlite:///./triagebot.db"
 URL_PREFIX = "sqlite:///"
@@ -38,7 +37,7 @@ def get_connection() -> sqlite3.Connection:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _row_to_ticket(row: sqlite3.Row) -> dict:
