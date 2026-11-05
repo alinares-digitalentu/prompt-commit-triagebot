@@ -68,6 +68,15 @@ def list_tickets(
     )
 
 
+@app.get("/tickets/{ticket_id}", response_model=Ticket)
+def get_ticket(ticket_id: int) -> dict:
+    """Devuelve un ticket. 404 si no existe; 422 si el id no es un entero (SPEC §9.2)."""
+    ticket = db.get_ticket(ticket_id)
+    if ticket is None:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    return ticket
+
+
 @app.patch("/tickets/{ticket_id}", response_model=Ticket)
 def update_ticket(ticket_id: int, payload: Annotated[dict, Body()]) -> dict:
     """Actualiza status, priority y/o assignees. El 404 se comprueba antes que el 422."""

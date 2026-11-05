@@ -101,7 +101,19 @@ def create_ticket(
     return _row_to_ticket(row)
 
 
+# Rango de un INTEGER de SQLite (64 bits con signo): fuera de él, ningún ticket puede existir
+# y pasarlo como parámetro provoca OverflowError (500).
+SQLITE_MIN_INT = -(2**63)
+SQLITE_MAX_INT = 2**63 - 1
+
+
+def _id_in_range(ticket_id: int) -> bool:
+    return SQLITE_MIN_INT <= ticket_id <= SQLITE_MAX_INT
+
+
 def get_ticket(ticket_id: int) -> dict | None:
+    if not _id_in_range(ticket_id):
+        return None
     with closing(get_connection()) as conn:
         row = conn.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,)).fetchone()
     return _row_to_ticket(row) if row else None
@@ -132,6 +144,8 @@ def list_tickets(
 
 def update_ticket(ticket_id: int, changes: dict) -> dict | None:
     """Actualiza status/priority/assignees. `updated_at` solo cambia si algo cambia de verdad."""
+    if not _id_in_range(ticket_id):
+        return None
     with closing(get_connection()) as conn:
         row = conn.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,)).fetchone()
         if row is None:
