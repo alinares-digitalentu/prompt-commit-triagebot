@@ -19,6 +19,7 @@ from app.models import (
     Status,
     Ticket,
     TicketCreate,
+    TicketStats,
     TicketUpdate,
 )
 
@@ -80,6 +81,13 @@ def list_tickets(
     return db.list_tickets(
         category=category, priority=priority, status=status, assignee=assignee, overdue=overdue
     )
+
+
+# Debe ir ANTES que /tickets/{ticket_id}: si no, «stats» se interpretaría como un id.
+@app.get("/tickets/stats", response_model=TicketStats)
+def tickets_stats() -> dict:
+    """Número de tickets en total y por categoría, prioridad y estado (solo lectura)."""
+    return db.get_stats()
 
 
 @app.get("/tickets/{ticket_id}", response_model=Ticket)

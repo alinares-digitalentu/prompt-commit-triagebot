@@ -350,3 +350,20 @@ Marta pide que un ticket pueda tener **varios responsables** y poder **filtrar e
 - `POST /tickets` devuelve `409` con `{"detail": "Ya existe un ticket igual (#N)"}` y no crea nada. En la web se muestra ese mensaje en la tabla.
 - La comprobación ocurre **antes** de llamar a la IA (no se gastan tokens) y de nuevo, de forma atómica, al insertar: dos peticiones idénticas simultáneas crean un único ticket.
 - Los tickets `closed` no cuentan: si un problema ya cerrado reaparece, se puede registrar de nuevo. Los `resolved` sí cuentan (pueden reabrirse).
+
+### 9.7 Estadísticas (petición de Marta por Slack)
+
+- `GET /tickets/stats` devuelve `200` con un JSON de solo lectura:
+
+```json
+{
+  "total": 47,
+  "by_category": {"bug": 18, "feature_request": 10, "question": 12, "urgent": 7},
+  "by_priority": {"P1": 5, "P2": 20, "P3": 22},
+  "by_status": {"open": 30, "in_progress": 8, "resolved": 5, "closed": 4}
+}
+```
+
+- Las claves de cada desglose son **siempre todos** los valores del enum, con `0` si no hay tickets; así la forma es estable (la usará el agente del Día 3).
+- Cada desglose suma `total`. Sin frontend: solo JSON.
+- La ruta se declara antes que `GET /tickets/{ticket_id}` para que `stats` no se tome por un id.
