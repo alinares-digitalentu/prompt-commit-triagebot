@@ -6,11 +6,11 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 ALLOWED_CATEGORIES = {"bug", "feature_request", "question", "urgent"}
 ALLOWED_PRIORITIES = {"P1", "P2", "P3"}
-ALLOWED_STATUSES = {"open", "in_progress", "closed"}
+ALLOWED_STATUSES = {"open", "in_progress", "resolved", "closed"}
 
 Category = Literal["bug", "feature_request", "question", "urgent"]
 Priority = Literal["P1", "P2", "P3"]
-Status = Literal["open", "in_progress", "closed"]
+Status = Literal["open", "in_progress", "resolved", "closed"]
 
 
 class TicketCreate(BaseModel):
@@ -45,3 +45,4 @@ class Ticket(BaseModel):
     status: Status
     created_at: str
     updated_at: str
+    status_changed_at: str

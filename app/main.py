@@ -24,6 +24,8 @@ from app.models import (
 
 logger = logging.getLogger(__name__)
 
+STATUS_ORDER = ["open", "in_progress", "resolved", "closed"]
+
 app = FastAPI(title="TriageBot")
 templates = Jinja2Templates(directory=Path(__file__).resolve().parent.parent / "templates")
 
@@ -94,7 +96,7 @@ def _render_table(
     return templates.TemplateResponse(
         request,
         "_tickets_table.html",
-        {"tickets": db.list_tickets(**filters), "error": error},
+        {"tickets": db.list_tickets(**filters), "error": error, "statuses": STATUS_ORDER},
     )
 
 
@@ -109,7 +111,7 @@ def index(request: Request) -> HTMLResponse:
             "error": None,
             "categories": sorted(ALLOWED_CATEGORIES),
             "priorities": sorted(ALLOWED_PRIORITIES),
-            "statuses": ["open", "in_progress", "closed"],
+            "statuses": STATUS_ORDER,
         },
     )
 
