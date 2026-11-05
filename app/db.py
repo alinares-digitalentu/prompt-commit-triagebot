@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS tickets (
     priority TEXT NOT NULL CHECK (priority IN ('P1','P2','P3')),
     tags TEXT NOT NULL DEFAULT '[]',
     assignees TEXT NOT NULL DEFAULT '[]',
-    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','in_progress','closed')),
+    status TEXT NOT NULL DEFAULT 'open'
+        CHECK (status IN ('open','in_progress','resolved','closed')),
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     status_changed_at TEXT NOT NULL
@@ -55,9 +56,9 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE tickets RENAME TO tickets_old")
         conn.execute(SCHEMA)
         conn.execute(
-            "INSERT INTO tickets (id, title, description, category, priority, tags, status,"
-            " created_at, updated_at, status_changed_at)"
-            " SELECT id, title, description, category, priority, tags, status,"
+            "INSERT INTO tickets (id, title, description, category, priority, tags, assignees,"
+            " status, created_at, updated_at, status_changed_at)"
+            " SELECT id, title, description, category, priority, tags, assignees, status,"
             " created_at, updated_at, updated_at FROM tickets_old"
         )
         conn.execute("DROP TABLE tickets_old")
@@ -82,8 +83,8 @@ def create_ticket(
         with conn:  # commit o rollback
             cur = conn.execute(
                 "INSERT INTO tickets (title, description, category, priority, tags,"
-                " status, created_at, updated_at, status_changed_at)"
-                " VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?)",
+                " assignees, status, created_at, updated_at, status_changed_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?, ?)",
                 (
                     title,
                     description,
@@ -144,10 +145,13 @@ def update_ticket(ticket_id: int, changes: dict) -> dict | None:
             if "status" in real_changes:
                 stamped["status_changed_at"] = now
             assignments = ", ".join(f"{column} = ?" for column in stamped)
+            values = [
+                json.dumps(v) if column == "assignees" else v for column, v in stamped.items()
+            ]
             with conn:  # commit o rollback
                 conn.execute(
                     f"UPDATE tickets SET {assignments} WHERE id = ?",
-                    (*stamped.values(), ticket_id),
+                    (*values, ticket_id),
                 )
             row = conn.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,)).fetchone()
     return _row_to_ticket(row)
