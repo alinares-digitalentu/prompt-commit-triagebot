@@ -332,3 +332,9 @@ Marta pide que un ticket pueda tener **varios responsables** y poder **filtrar e
 
 - Nueva columna «Responsables» en la tabla.
 - Nuevo filtro «Responsable» junto a los otros tres, con la opción «Todos».
+
+
+### 9.7 Robustez ante entradas hostiles (QA adversarial)
+
+- Un texto (`title`, `description` o un nombre de `assignees`) que no se pueda codificar en UTF-8 (por ejemplo un surrogate suelto como `"\ud800"`) → `422`. Nunca `500`.
+- Un `ticket_id` fuera del rango de enteros de SQLite (mayor que 2^63-1) en `PATCH /tickets/{id}` o en la edición de fila de la interfaz se trata como un ticket que no existe: `404` en la API y mensaje «no existe» en la tabla. Nunca `500`.

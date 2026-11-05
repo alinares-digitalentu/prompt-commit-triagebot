@@ -101,7 +101,14 @@ def create_ticket(
     return _row_to_ticket(row)
 
 
+def _in_sqlite_range(ticket_id: int) -> bool:
+    """SQLite solo admite enteros de 64 bits: un id mayor no puede existir (SPEC §9.7)."""
+    return -(2**63) <= ticket_id < 2**63
+
+
 def get_ticket(ticket_id: int) -> dict | None:
+    if not _in_sqlite_range(ticket_id):
+        return None
     with closing(get_connection()) as conn:
         row = conn.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,)).fetchone()
     return _row_to_ticket(row) if row else None
@@ -132,6 +139,8 @@ def list_tickets(
 
 def update_ticket(ticket_id: int, changes: dict) -> dict | None:
     """Actualiza status/priority/assignees. `updated_at` solo cambia si algo cambia de verdad."""
+    if not _in_sqlite_range(ticket_id):
+        return None
     with closing(get_connection()) as conn:
         row = conn.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,)).fetchone()
         if row is None:

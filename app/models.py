@@ -16,12 +16,24 @@ MAX_ASSIGNEES = 5
 MAX_ASSIGNEE_LENGTH = 50
 
 
+def ensure_utf8(text: str) -> str:
+    """Rechaza surrogates sueltos (p. ej. '\\ud800'): no se pueden guardar en SQLite (SPEC §9.7)."""
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError:
+        raise ValueError("El texto contiene caracteres Unicode no válidos") from None
+    return text
+
+
+Text = Annotated[str, AfterValidator(ensure_utf8)]
+
+
 def normalize_assignees(names: list[str]) -> list[str]:
     """Recorta, valida (1-50), quita duplicados sin distinguir mayúsculas y limita a 5."""
     result: list[str] = []
     seen: set[str] = set()
     for name in names:
-        clean = name.strip()
+        clean = ensure_utf8(name).strip()
         if not 1 <= len(clean) <= MAX_ASSIGNEE_LENGTH:
             raise ValueError(
                 f"Cada responsable debe tener entre 1 y {MAX_ASSIGNEE_LENGTH} caracteres"
@@ -40,8 +52,8 @@ Assignees = Annotated[list[str], AfterValidator(normalize_assignees)]
 class TicketCreate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    title: str = Field(min_length=1, max_length=200)
-    description: str = Field(min_length=1, max_length=5000)
+    title: Text = Field(min_length=1, max_length=200)
+    description: Text = Field(min_length=1, max_length=5000)
     assignees: Assignees = Field(default_factory=list)
 
 

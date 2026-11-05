@@ -4,8 +4,9 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import Body, FastAPI, Form, HTTPException, Query, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 
@@ -66,6 +67,13 @@ def list_tickets(
     return db.list_tickets(
         category=category, priority=priority, status=status, assignee=assignee
     )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """422 sin devolver el valor recibido (`input`): puede no ser serializable (SPEC §9.7)."""
+    errors = [{k: v for k, v in error.items() if k != "input"} for error in exc.errors()]
+    return JSONResponse(status_code=422, content={"detail": jsonable_encoder(errors)})
 
 
 @app.patch("/tickets/{ticket_id}", response_model=Ticket)
