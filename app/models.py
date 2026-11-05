@@ -75,3 +75,10 @@ class Ticket(BaseModel):
     status_changed_at: str
     due_at: str
     overdue: bool
+
+
+class TicketStats(BaseModel):
+    total: int
+    by_category: dict[str, int]
+    by_priority: dict[str, int]
+    by_status: dict[str, int]

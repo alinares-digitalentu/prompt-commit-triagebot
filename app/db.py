@@ -179,6 +179,30 @@ def get_ticket(ticket_id: int) -> dict | None:
     return _row_to_ticket(row) if row else None
 
 
+# Valores en orden fijo: el JSON de estadísticas siempre trae todas las claves (con 0 si no hay).
+CATEGORY_VALUES = ("bug", "feature_request", "question", "urgent")
+PRIORITY_VALUES = ("P1", "P2", "P3")
+STATUS_VALUES = ("open", "in_progress", "resolved", "closed")
+
+
+def get_stats() -> dict:
+    """Conteo de tickets: total y desglose por categoría, prioridad y estado."""
+    with closing(get_connection()) as conn:
+        total = conn.execute("SELECT COUNT(*) FROM tickets").fetchone()[0]
+
+        def breakdown(column: str, values: tuple[str, ...]) -> dict[str, int]:
+            rows = conn.execute(f"SELECT {column}, COUNT(*) FROM tickets GROUP BY {column}")
+            counts = {row[0]: row[1] for row in rows}
+            return {value: counts.get(value, 0) for value in values}
+
+        return {
+            "total": total,
+            "by_category": breakdown("category", CATEGORY_VALUES),
+            "by_priority": breakdown("priority", PRIORITY_VALUES),
+            "by_status": breakdown("status", STATUS_VALUES),
+        }
+
+
 def list_tickets(
     category: str | None = None,
     priority: str | None = None,
