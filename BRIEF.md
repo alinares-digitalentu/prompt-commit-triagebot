@@ -73,7 +73,7 @@ Sabremos que está terminado cuando:
 - Los 5 tests obligatorios estén verdes.
 - El pipeline de GitHub Actions esté verde.
 
-## Fuera de alcance
+## Fuera de alcance...
 
 No hace falta:
 

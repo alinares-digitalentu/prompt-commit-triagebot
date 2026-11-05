@@ -65,3 +65,45 @@ def create_ticket(title: str, description: str, classification: dict) -> dict:
             )
         row = conn.execute("SELECT * FROM tickets WHERE id = ?", (cur.lastrowid,)).fetchone()
     return _row_to_ticket(row)
+
+
+def get_ticket(ticket_id: int) -> dict | None:
+    with closing(get_connection()) as conn:
+        row = conn.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,)).fetchone()
+    return _row_to_ticket(row) if row else None
+
+
+def list_tickets(
+    category: str | None = None,
+    priority: str | None = None,
+    status: str | None = None,
+) -> list[dict]:
+    """Lista tickets (más recientes primero); los filtros se combinan con AND."""
+    filters = {"category": category, "priority": priority, "status": status}
+    active = {column: value for column, value in filters.items() if value is not None}
+    where = " AND ".join(f"{column} = ?" for column in active)
+    query = "SELECT * FROM tickets"
+    if where:
+        query += f" WHERE {where}"
+    query += " ORDER BY created_at DESC, id DESC"
+    with closing(get_connection()) as conn:
+        rows = conn.execute(query, tuple(active.values())).fetchall()
+    return [_row_to_ticket(row) for row in rows]
+
+
+def update_ticket(ticket_id: int, changes: dict) -> dict | None:
+    """Actualiza status/priority. `updated_at` solo cambia si algún valor cambia de verdad."""
+    with closing(get_connection()) as conn:
+        row = conn.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,)).fetchone()
+        if row is None:
+            return None
+        real_changes = {k: v for k, v in changes.items() if row[k] != v}
+        if real_changes:
+            assignments = ", ".join(f"{column} = ?" for column in real_changes)
+            with conn:  # commit o rollback
+                conn.execute(
+                    f"UPDATE tickets SET {assignments}, updated_at = ? WHERE id = ?",
+                    (*real_changes.values(), _now(), ticket_id),
+                )
+            row = conn.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,)).fetchone()
+    return _row_to_ticket(row)
