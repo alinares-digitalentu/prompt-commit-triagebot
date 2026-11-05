@@ -1,0 +1,24 @@
+{# Etiquetas legibles y colores por valor. Los valores internos (bug, in_progress...) no cambian. #}
+{% set category = {
+  "bug": "Bug",
+  "feature_request": "Mejora",
+  "question": "Consulta",
+  "urgent": "Urgente"
+} %}
+{% set status = {
+  "open": "Abierto",
+  "in_progress": "En curso",
+  "resolved": "Resuelto",
+  "closed": "Cerrado"
+} %}
+{% set category_colors = {
+  "bug": "bg-red-100 text-red-900",
+  "feature_request": "bg-blue-100 text-blue-900",
+  "question": "bg-slate-200 text-slate-900",
+  "urgent": "bg-orange-100 text-orange-900"
+} %}
+{% set priority_colors = {
+  "P1": "bg-red-700 text-white",
+  "P2": "bg-amber-300 text-slate-900",
+  "P3": "bg-slate-200 text-slate-900"
+} %}

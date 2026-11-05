@@ -1,80 +1,97 @@
-{% set category_colors = {
-  "bug": "bg-red-100 text-red-800",
-  "feature_request": "bg-blue-100 text-blue-800",
-  "question": "bg-slate-200 text-slate-800",
-  "urgent": "bg-orange-100 text-orange-800"
-} %}
-{% set priority_colors = {
-  "P1": "bg-red-600 text-white",
-  "P2": "bg-amber-400 text-slate-900",
-  "P3": "bg-slate-200 text-slate-800"
-} %}
+{% import "_labels.html" as L %}
 {% if error %}
-<p role="alert" class="mb-3 rounded border border-red-300 bg-red-50 px-3 py-2 text-red-800">{{ error }}</p>
+<p role="alert" class="mb-3 rounded-md border border-red-400 bg-red-50 px-3 py-2 text-sm text-red-900">{{ error }}</p>
 {% endif %}
-<table class="min-w-full divide-y divide-slate-200 overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-slate-200">
-  <thead class="bg-slate-100">
-    <tr>
-      <th class="px-3 py-2 text-left text-sm font-semibold">ID</th>
-      <th class="px-3 py-2 text-left text-sm font-semibold">Título</th>
-      <th class="px-3 py-2 text-left text-sm font-semibold">Categoría</th>
-      <th class="px-3 py-2 text-left text-sm font-semibold">Prioridad</th>
-      <th class="px-3 py-2 text-left text-sm font-semibold">Estado</th>
-      <th class="px-3 py-2 text-left text-sm font-semibold">Responsables</th>
-      <th class="px-3 py-2 text-left text-sm font-semibold">En este estado desde</th>
-      <th class="px-3 py-2 text-left text-sm font-semibold">Etiquetas</th>
-      <th class="px-3 py-2 text-left text-sm font-semibold">Creado</th>
-    </tr>
-  </thead>
-  <tbody id="tickets-table-body" class="divide-y divide-slate-100">
-    {% for ticket in tickets %}
-    <tr>
-      <td class="px-3 py-2 text-sm">{{ ticket.id }}</td>
-      <td class="px-3 py-2 text-sm">{{ ticket.title }}</td>
-      <td class="px-3 py-2 text-sm">
-        <span class="rounded px-2 py-0.5 text-xs font-medium {{ category_colors[ticket.category] }}">{{ ticket.category }}</span>
-      </td>
-      <td class="px-3 py-2 text-sm">
-        <select name="new_priority" aria-label="Prioridad del ticket {{ ticket.id }}"
-                hx-post="/ui/tickets/{{ ticket.id }}" hx-trigger="change" hx-target="#tabla"
-                hx-include="closest tr, #filtros"
-                class="rounded px-2 py-0.5 text-xs font-bold {{ priority_colors[ticket.priority] }}">
-          {% for value in ["P1", "P2", "P3"] %}
-          <option value="{{ value }}" {{ "selected" if ticket.priority == value }}>{{ value }}</option>
-          {% endfor %}
-        </select>
-      </td>
-      <td class="px-3 py-2 text-sm">
-        <select name="new_status" aria-label="Estado del ticket {{ ticket.id }}"
-                hx-post="/ui/tickets/{{ ticket.id }}" hx-trigger="change" hx-target="#tabla"
-                hx-include="closest tr, #filtros"
-                class="rounded border border-slate-300 px-2 py-0.5 text-xs">
-          {% for value in statuses %}
-          <option value="{{ value }}" {{ "selected" if ticket.status == value }}>{{ value }}</option>
-          {% endfor %}
-        </select>
-        {% if ticket.status in ["resolved", "closed"] %}
-        <button type="button" hx-post="/ui/tickets/{{ ticket.id }}" hx-vals='{"new_status": "open"}'
-                hx-target="#tabla" hx-include="#filtros"
-                class="ml-1 rounded border border-blue-300 px-2 py-0.5 text-xs text-blue-700 hover:bg-blue-50">
-          Reabrir
-        </button>
-        {% endif %}
-      </td>
-      <td class="px-3 py-2 text-sm">
-        <input name="new_assignees" value="{{ ticket.assignees | join(', ') }}"
-               aria-label="Responsables del ticket {{ ticket.id }}" placeholder="Sin asignar"
-               hx-post="/ui/tickets/{{ ticket.id }}" hx-trigger="change" hx-target="#tabla"
-               hx-include="closest tr, #filtros"
-               class="w-44 rounded border border-slate-300 px-2 py-0.5 text-xs">
-      </td>
-      <td class="px-3 py-2 text-sm text-slate-600">{{ ticket.tags | join(", ") }}</td>
-      <td class="px-3 py-2 text-sm text-slate-600">{{ ticket.created_at }}</td>
-    </tr>
-    {% else %}
-    <tr>
-      <td colspan="8" class="px-3 py-6 text-center text-sm text-slate-500">No hay tickets.</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<p role="status" class="mb-2 text-sm text-slate-700">
+  {{ tickets | length }} {{ "ticket" if tickets | length == 1 else "tickets" }}
+</p>
+<div class="overflow-x-auto rounded-lg bg-white shadow-sm ring-1 ring-slate-200">
+  <table class="min-w-full divide-y divide-slate-200 text-sm">
+    <caption class="sr-only">Tickets de soporte, del más reciente al más antiguo</caption>
+    <thead class="bg-slate-100 text-left text-slate-800">
+      <tr>
+        <th scope="col" class="px-3 py-2.5 font-semibold">ID</th>
+        <th scope="col" class="px-3 py-2.5 font-semibold">Título</th>
+        <th scope="col" class="px-3 py-2.5 font-semibold">Categoría</th>
+        <th scope="col" class="px-3 py-2.5 font-semibold">Prioridad</th>
+        <th scope="col" class="px-3 py-2.5 font-semibold">Estado</th>
+        <th scope="col" class="px-3 py-2.5 font-semibold">Responsables</th>
+        <th scope="col" class="px-3 py-2.5 font-semibold">Etiquetas</th>
+        <th scope="col" class="whitespace-nowrap px-3 py-2.5 font-semibold">En este estado desde</th>
+        <th scope="col" class="px-3 py-2.5 font-semibold">Creado</th>
+      </tr>
+    </thead>
+    <tbody id="tickets-table-body" class="divide-y divide-slate-100 [&>tr]:align-top [&>tr:hover]:bg-slate-50">
+      {% for ticket in tickets %}
+      <tr>
+        <td class="px-3 py-2.5 tabular-nums text-slate-700">{{ ticket.id }}</td>
+        <th scope="row" class="min-w-64 max-w-md px-3 py-2.5 text-left font-medium">{{ ticket.title }}</th>
+        <td class="px-3 py-2.5">
+          <span class="inline-block whitespace-nowrap rounded px-2 py-0.5 text-xs font-medium {{ L.category_colors[ticket.category] }}">{{ L.category[ticket.category] }}</span>
+        </td>
+        <td class="px-3 py-2.5">
+          <select id="prio-{{ ticket.id }}" name="new_priority" aria-label="Prioridad del ticket {{ ticket.id }}"
+                  hx-post="/ui/tickets/{{ ticket.id }}" hx-trigger="change" hx-target="#tabla"
+                  hx-include="closest tr, #filtros" hx-indicator="#tabla"
+                  class="rounded-md px-2 py-1 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1 {{ L.priority_colors[ticket.priority] }}">
+            {% for value in ["P1", "P2", "P3"] %}
+            <option value="{{ value }}" {{ "selected" if ticket.priority == value }}>{{ value }}</option>
+            {% endfor %}
+          </select>
+        </td>
+        <td class="px-3 py-2.5">
+          <div class="flex items-center gap-2">
+            <select id="status-{{ ticket.id }}" name="new_status" aria-label="Estado del ticket {{ ticket.id }}"
+                    hx-post="/ui/tickets/{{ ticket.id }}" hx-trigger="change" hx-target="#tabla"
+                    hx-include="closest tr, #filtros" hx-indicator="#tabla"
+                    class="field !w-auto !py-1">
+              {% for value in statuses %}
+              <option value="{{ value }}" {{ "selected" if ticket.status == value }}>{{ L.status[value] }}</option>
+              {% endfor %}
+            </select>
+            {% if ticket.status in ["resolved", "closed"] %}
+            <button type="button" id="reopen-{{ ticket.id }}"
+                    hx-post="/ui/tickets/{{ ticket.id }}" hx-vals='{"new_status": "open"}'
+                    hx-target="#tabla" hx-include="#filtros" hx-indicator="#tabla"
+                    aria-label="Reabrir ticket {{ ticket.id }}"
+                    class="btn border border-blue-700 !px-2.5 !py-1 text-blue-800 hover:bg-blue-50">
+              Reabrir
+            </button>
+            {% endif %}
+          </div>
+        </td>
+        <td class="px-3 py-2.5">
+          <input id="assignees-{{ ticket.id }}" name="new_assignees" value="{{ ticket.assignees | join(', ') }}"
+                 aria-label="Responsables del ticket {{ ticket.id }}" placeholder="Sin asignar"
+                 hx-post="/ui/tickets/{{ ticket.id }}" hx-trigger="change" hx-target="#tabla"
+                 hx-include="closest tr, #filtros" hx-indicator="#tabla"
+                 class="field !w-44 !py-1">
+        </td>
+        <td class="px-3 py-2.5">
+          {% if ticket.tags %}
+          <ul class="flex max-w-56 flex-wrap gap-1">
+            {% for tag in ticket.tags %}
+            <li class="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-800">{{ tag }}</li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <span class="text-slate-600" aria-label="Sin etiquetas">—</span>
+          {% endif %}
+        </td>
+        <td class="whitespace-nowrap px-3 py-2.5 tabular-nums text-slate-700">
+          <time datetime="{{ ticket.status_changed_at }}" title="{{ ticket.status_changed_at }}">{{ ticket.status_changed_at[:10] }}</time>
+        </td>
+        <td class="whitespace-nowrap px-3 py-2.5 tabular-nums text-slate-700">
+          <time datetime="{{ ticket.created_at }}" title="{{ ticket.created_at }}">{{ ticket.created_at[:10] }}</time>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="9" class="px-3 py-10 text-center text-slate-700">
+          No hay tickets. <span class="text-slate-600">Crea uno arriba o cambia los filtros.</span>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
