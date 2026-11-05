@@ -61,10 +61,11 @@ def list_tickets(
     priority: Priority | None = None,
     status: Status | None = None,
     assignee: Annotated[str | None, Query(min_length=1)] = None,
+    overdue: bool | None = None,
 ) -> list[dict]:
-    """Lista tickets filtrando por categoría, prioridad, estado y responsable (AND)."""
+    """Lista tickets filtrando por categoría, prioridad, estado, responsable y vencidos (AND)."""
     return db.list_tickets(
-        category=category, priority=priority, status=status, assignee=assignee
+        category=category, priority=priority, status=status, assignee=assignee, overdue=overdue
     )
 
 
@@ -93,8 +94,8 @@ def update_ticket(ticket_id: int, payload: Annotated[dict, Body()]) -> dict:
 
 
 def _clean_filters(
-    category: str, priority: str, status: str, assignee: str = ""
-) -> dict[str, str | None]:
+    category: str, priority: str, status: str, assignee: str = "", overdue: str = ""
+) -> dict[str, str | bool | None]:
     """Convierte los filtros del formulario ('' = Todas) y descarta valores fuera del enum."""
     allowed = {
         "category": (category, ALLOWED_CATEGORIES),
@@ -105,6 +106,7 @@ def _clean_filters(
         name: (value if value in valid else None) for name, (value, valid) in allowed.items()
     }
     filters["assignee"] = assignee.strip() or None
+    filters["overdue"] = True if overdue == "1" else None  # «Solo vencidos»
     return filters
 
 
@@ -115,7 +117,7 @@ def _parse_assignees(text: str) -> list[str]:
 
 def _render_table(
     request: Request,
-    filters: dict[str, str | None],
+    filters: dict[str, str | bool | None],
     error: str | None = None,
 ) -> HTMLResponse:
     """Fragmento HTML de la tabla; los errores se muestran dentro del fragmento."""
@@ -149,9 +151,10 @@ def ui_list_tickets(
     priority: str = "",
     status: str = "",
     assignee: str = "",
+    overdue: str = "",
 ) -> HTMLResponse:
     """Tabla filtrada para HTMX."""
-    return _render_table(request, _clean_filters(category, priority, status, assignee))
+    return _render_table(request, _clean_filters(category, priority, status, assignee, overdue))
 
 
 @app.post("/ui/tickets", response_class=HTMLResponse)
@@ -164,9 +167,10 @@ def ui_create_ticket(
     priority: Annotated[str, Form()] = "",
     status: Annotated[str, Form()] = "",
     assignee: Annotated[str, Form()] = "",
+    overdue: Annotated[str, Form()] = "",
 ) -> HTMLResponse:
     """Crea un ticket desde el formulario y devuelve la tabla (con el mensaje si hay error)."""
-    filters = _clean_filters(category, priority, status, assignee)
+    filters = _clean_filters(category, priority, status, assignee, overdue)
     try:
         payload = TicketCreate(
             title=title, description=description, assignees=_parse_assignees(assignees)
@@ -192,9 +196,10 @@ def ui_update_ticket(
     priority: Annotated[str, Form()] = "",
     status: Annotated[str, Form()] = "",
     assignee: Annotated[str, Form()] = "",
+    overdue: Annotated[str, Form()] = "",
 ) -> HTMLResponse:
     """Actualiza estado, prioridad y/o responsables desde la fila de la tabla."""
-    filters = _clean_filters(category, priority, status, assignee)
+    filters = _clean_filters(category, priority, status, assignee, overdue)
     changes: dict = {"status": new_status or None, "priority": new_priority or None}
     changes = {k: v for k, v in changes.items() if v}
     if new_assignees is not None:  # campo enviado (aunque vacío = quitar a todos)

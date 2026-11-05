@@ -1,4 +1,5 @@
 <!doctype html>
+{% import "_labels.html" as L %}
 <html lang="es">
 <head>
   <meta charset="utf-8">
@@ -6,49 +7,115 @@
   <title>TriageBot</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <style type="text/tailwindcss">
+    @layer components {
+      .field {
+        @apply w-full rounded-md border border-slate-500 bg-white px-3 py-2 text-sm text-slate-900
+               placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2
+               focus-visible:ring-blue-600 focus-visible:ring-offset-1;
+      }
+      .label { @apply mb-1 block text-sm font-medium text-slate-700; }
+      .btn {
+        @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold
+               focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600
+               focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+      }
+    }
+  </style>
+  <style>
+    ::selection { background: #bfdbfe; }
+    #tabla { transition: opacity .15s ease-out; }
+    #tabla.htmx-request { opacity: .55; }
+    @media (prefers-reduced-motion: reduce) { #tabla { transition: none; } }
+  </style>
 </head>
-<body class="bg-slate-50 text-slate-900">
-  <main class="mx-auto max-w-6xl space-y-6 p-6">
+<body class="min-h-screen bg-slate-50 text-slate-900 antialiased">
+  <main class="mx-auto max-w-7xl space-y-8 px-4 py-6 sm:px-6 sm:py-10">
     <header>
-      <h1 class="text-3xl font-bold">TriageBot</h1>
-      <p class="mt-2 text-slate-600">Tablero de incidencias con clasificación automática por IA.</p>
+      <h1 class="text-2xl font-bold tracking-tight sm:text-3xl">TriageBot</h1>
+      <p class="mt-1 max-w-prose text-slate-700">Tablero de incidencias con clasificación automática por IA.</p>
     </header>
 
-    <section class="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200">
-      <h2 class="mb-3 text-lg font-semibold">Nuevo ticket</h2>
+    <section aria-labelledby="nuevo-ticket" class="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-6">
+      <h2 id="nuevo-ticket" class="text-lg font-semibold">Nuevo ticket</h2>
+      <p class="mt-1 text-sm text-slate-700">La IA asignará categoría, prioridad y etiquetas al crearlo.</p>
       <form hx-post="/ui/tickets" hx-target="#tabla" hx-include="#filtros"
-            hx-on::after-request="if (event.detail.successful) this.reset()" class="space-y-3">
-        <input name="title" maxlength="200" required placeholder="Título"
-               class="w-full rounded border border-slate-300 px-3 py-2">
-        <textarea name="description" maxlength="5000" required rows="3" placeholder="Descripción"
-                  class="w-full rounded border border-slate-300 px-3 py-2"></textarea>
-        <input name="assignees" placeholder="Responsables (separados por comas, opcional)"
-               aria-label="Responsables" class="w-full rounded border border-slate-300 px-3 py-2">
-        <button type="submit" hx-disabled-elt="this"
-                class="rounded bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700
-                       disabled:opacity-50">
-          Crear ticket
-        </button>
+            hx-indicator="#creando"
+            hx-on::after-request="if (event.detail.successful) this.reset()"
+            class="mt-4 grid gap-4 md:grid-cols-2">
+        <div>
+          <label for="f-title" class="label">Título</label>
+          <input id="f-title" name="title" maxlength="200" required class="field">
+        </div>
+        <div>
+          <label for="f-assignees" class="label">
+            Responsables <span class="font-normal text-slate-600">(opcional)</span>
+          </label>
+          <input id="f-assignees" name="assignees" aria-describedby="f-assignees-help"
+                 placeholder="Ana, Luis" class="field">
+          <p id="f-assignees-help" class="mt-1 text-xs text-slate-600">Separados por comas. Máximo 5.</p>
+        </div>
+        <div class="md:col-span-2">
+          <label for="f-description" class="label">Descripción</label>
+          <textarea id="f-description" name="description" maxlength="5000" required rows="3"
+                    class="field"></textarea>
+        </div>
+        <div class="flex items-center gap-3 md:col-span-2">
+          <button type="submit" hx-disabled-elt="this"
+                  class="btn bg-blue-700 text-white hover:bg-blue-800">
+            Crear ticket
+          </button>
+          <span id="creando" role="status" class="htmx-indicator text-sm text-slate-700">
+            Clasificando con IA…
+          </span>
+        </div>
       </form>
     </section>
 
-    <section>
+    <section aria-labelledby="tablero">
+      <h2 id="tablero" class="mb-3 text-lg font-semibold">Tickets</h2>
       <form id="filtros" hx-get="/ui/tickets" hx-target="#tabla" hx-trigger="change"
-            class="mb-3 flex flex-wrap gap-3">
-        <select name="category" aria-label="Categoría" class="rounded border border-slate-300 px-2 py-1">
-          <option value="">Categoría: Todas</option>
-          {% for value in categories %}<option value="{{ value }}">{{ value }}</option>{% endfor %}
-        </select>
-        <select name="priority" aria-label="Prioridad" class="rounded border border-slate-300 px-2 py-1">
-          <option value="">Prioridad: Todas</option>
-          {% for value in priorities %}<option value="{{ value }}">{{ value }}</option>{% endfor %}
-        </select>
-        <select name="status" aria-label="Estado" class="rounded border border-slate-300 px-2 py-1">
-          <option value="">Estado: Todas</option>
-          {% for value in statuses %}<option value="{{ value }}">{{ value }}</option>{% endfor %}
-        </select>
-        <input name="assignee" aria-label="Responsable" placeholder="Responsable: Todos"
-               class="rounded border border-slate-300 px-2 py-1">
+            hx-indicator="#tabla"
+            class="mb-4 grid grid-cols-2 items-end gap-3 md:grid-cols-6">
+        <div>
+          <label for="x-category" class="label">Categoría</label>
+          <select id="x-category" name="category" class="field">
+            <option value="">Todas</option>
+            {% for value in categories %}<option value="{{ value }}">{{ L.category[value] }}</option>{% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="x-priority" class="label">Prioridad</label>
+          <select id="x-priority" name="priority" class="field">
+            <option value="">Todas</option>
+            {% for value in priorities %}<option value="{{ value }}">{{ value }}</option>{% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="x-status" class="label">Estado</label>
+          <select id="x-status" name="status" class="field">
+            <option value="">Todos</option>
+            {% for value in statuses %}<option value="{{ value }}">{{ L.status[value] }}</option>{% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="x-overdue" class="label">Plazo</label>
+          <select id="x-overdue" name="overdue" class="field">
+            <option value="">Todos</option>
+            <option value="1">Solo vencidos</option>
+          </select>
+        </div>
+        <div class="col-span-2 md:col-span-1">
+          <label for="x-assignee" class="label">Responsable</label>
+          <input id="x-assignee" name="assignee" placeholder="Todos" class="field">
+        </div>
+        <div class="col-span-2 md:col-span-1">
+          <button type="button"
+                  hx-on:click="this.form.reset(); htmx.trigger(this.form, 'change')"
+                  class="btn w-full border border-slate-500 bg-white text-slate-800 hover:bg-slate-100">
+            Limpiar filtros
+          </button>
+        </div>
       </form>
 
       <div id="tabla">{% include "_tickets_table.html" %}</div>

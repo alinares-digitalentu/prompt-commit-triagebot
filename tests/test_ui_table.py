@@ -35,13 +35,15 @@ def test_every_row_has_one_cell_per_header(client):
         client.post("/tickets", json={"title": title, "description": "D"})
 
     html = client.get("/ui/tickets").text
-    headers = html.count("<th ")
-    cells_in_first_row = html.split("<tr>")[2].count("<td ")
+    headers = html.split("</thead>")[0].count("<th ")
+    first_row = html.split("<tbody")[1].split("<tr>")[1]  # el título es <th scope="row">
+    cells_in_first_row = first_row.count("<td ") + first_row.count("<th ")
 
     assert headers == cells_in_first_row
 
 
 def test_empty_table_message_spans_all_columns(client):
     html = client.get("/ui/tickets").text
+    headers = html.split("</thead>")[0].count("<th ")
 
-    assert f'colspan="{html.count("<th ")}"' in html
+    assert f'colspan="{headers}"' in html
