@@ -91,12 +91,52 @@ def _row_to_ticket(row: sqlite3.Row) -> dict:
     return ticket
 
 
+class DuplicateTicketError(Exception):
+    """Ya existe un ticket (no cerrado) con el mismo título y la misma descripción."""
+
+    def __init__(self, ticket_id: int) -> None:
+        super().__init__(f"Ya existe un ticket igual (#{ticket_id})")
+        self.ticket_id = ticket_id
+
+
+def _normalize(text: str) -> str:
+    """Para comparar: sin distinguir mayúsculas ni espacios/saltos de línea repetidos."""
+    return " ".join(text.split()).casefold()
+
+
+def _find_duplicate_id(conn: sqlite3.Connection, title: str, description: str) -> int | None:
+    """Id de un ticket no cerrado igual a este (los cerrados no cuentan)."""
+    wanted = (_normalize(title), _normalize(description))
+    rows = conn.execute(
+        "SELECT id, title, description FROM tickets WHERE status != 'closed' ORDER BY id"
+    )
+    for row in rows:
+        if (_normalize(row["title"]), _normalize(row["description"])) == wanted:
+            return row["id"]
+    return None
+
+
+def find_duplicate(title: str, description: str) -> int | None:
+    """Comprobación rápida (sin escribir) para evitar clasificar un ticket que ya existe."""
+    with closing(get_connection()) as conn:
+        return _find_duplicate_id(conn, title, description)
+
+
 def create_ticket(
     title: str, description: str, classification: dict, assignees: list[str] | None = None
 ) -> dict:
+    """Crea el ticket. Lanza DuplicateTicketError si ya hay uno igual no cerrado.
+
+    Comprobar e insertar van en una sola transacción (BEGIN IMMEDIATE) para que dos
+    peticiones simultáneas idénticas no se cuelen las dos.
+    """
     now = _now()
     with closing(get_connection()) as conn:
-        with conn:  # commit o rollback
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            duplicate_id = _find_duplicate_id(conn, title, description)
+            if duplicate_id is not None:
+                raise DuplicateTicketError(duplicate_id)
             cur = conn.execute(
                 "INSERT INTO tickets (title, description, category, priority, tags,"
                 " assignees, status, created_at, updated_at, status_changed_at)"
@@ -113,6 +153,10 @@ def create_ticket(
                     now,
                 ),
             )
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
         row = conn.execute("SELECT * FROM tickets WHERE id = ?", (cur.lastrowid,)).fetchone()
     return _row_to_ticket(row)
 
