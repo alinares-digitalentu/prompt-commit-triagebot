@@ -73,3 +73,5 @@ class Ticket(BaseModel):
     created_at: str
     updated_at: str
     status_changed_at: str
+    due_at: str
+    overdue: bool

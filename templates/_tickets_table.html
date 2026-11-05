@@ -15,6 +15,7 @@
         <th scope="col" class="px-3 py-2.5 font-semibold">Categoría</th>
         <th scope="col" class="px-3 py-2.5 font-semibold">Prioridad</th>
         <th scope="col" class="px-3 py-2.5 font-semibold">Estado</th>
+        <th scope="col" class="whitespace-nowrap px-3 py-2.5 font-semibold">Vence</th>
         <th scope="col" class="px-3 py-2.5 font-semibold">Responsables</th>
         <th scope="col" class="px-3 py-2.5 font-semibold">Etiquetas</th>
         <th scope="col" class="whitespace-nowrap px-3 py-2.5 font-semibold">En este estado desde</th>
@@ -23,7 +24,7 @@
     </thead>
     <tbody id="tickets-table-body" class="divide-y divide-slate-100 [&>tr]:align-top [&>tr:hover]:bg-slate-50">
       {% for ticket in tickets %}
-      <tr>
+      <tr{% if ticket.overdue %} class="bg-red-50"{% endif %}>
         <td class="px-3 py-2.5 tabular-nums text-slate-700">{{ ticket.id }}</td>
         <th scope="row" class="min-w-64 max-w-md px-3 py-2.5 text-left font-medium">{{ ticket.title }}</th>
         <td class="px-3 py-2.5">
@@ -60,6 +61,12 @@
             {% endif %}
           </div>
         </td>
+        <td class="whitespace-nowrap px-3 py-2.5 tabular-nums text-slate-700">
+          <time datetime="{{ ticket.due_at }}" title="{{ ticket.due_at }}">{{ ticket.due_at[:10] }}</time>
+          {% if ticket.overdue %}
+          <span class="ml-1 inline-block rounded bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-900">Vencido</span>
+          {% endif %}
+        </td>
         <td class="px-3 py-2.5">
           <input id="assignees-{{ ticket.id }}" name="new_assignees" value="{{ ticket.assignees | join(', ') }}"
                  aria-label="Responsables del ticket {{ ticket.id }}" placeholder="Sin asignar"
@@ -87,7 +94,7 @@
       </tr>
       {% else %}
       <tr>
-        <td colspan="9" class="px-3 py-10 text-center text-slate-700">
+        <td colspan="10" class="px-3 py-10 text-center text-slate-700">
           No hay tickets. <span class="text-slate-600">Crea uno arriba o cambia los filtros.</span>
         </td>
       </tr>

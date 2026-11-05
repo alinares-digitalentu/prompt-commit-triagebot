@@ -28,6 +28,8 @@ Campos mínimos:
 | `created_at` | datetime | UTC, generado en servidor |
 | `updated_at` | datetime | UTC, actualizado en cambios relevantes |
 | `status_changed_at` | datetime | UTC, «en este estado desde»: se fija al crear y cambia solo cuando cambia `status` |
+| `due_at` | datetime | UTC, calculado (no se guarda): fin del día de `created_at` + plazo de la prioridad |
+| `overdue` | bool | Calculado: `true` si el ticket está `open`/`in_progress` y ya pasó `due_at` |
 
 Valores por defecto:
 
@@ -332,3 +334,12 @@ Marta pide que un ticket pueda tener **varios responsables** y poder **filtrar e
 
 - Nueva columna «Responsables» en la tabla.
 - Nuevo filtro «Responsable» junto a los otros tres, con la opción «Todos».
+
+### 9.5 Plazos (petición de Marta)
+
+- **Fecha límite** (`due_at`): fin del día (UTC, `23:59:59Z`) de la fecha de creación más el plazo de la prioridad: `P1` el mismo día, `P2` el día siguiente, `P3` a los dos días.
+- Se **calcula** al leer a partir de `created_at` y `priority`; no se guarda. Si cambia la prioridad, cambia la fecha límite.
+- **Vencido** (`overdue`): el ticket está `open` o `in_progress` y la hora actual supera `due_at`. Un ticket `resolved` o `closed` nunca está vencido; si se reabre pasada su fecha, vuelve a estarlo.
+- `GET /tickets?overdue=true` devuelve solo los vencidos y `overdue=false` solo los demás. Un valor que no sea booleano devuelve `422`. Se combina con el resto de filtros mediante **AND**.
+- Tablero: columna «Vence» con la fecha, etiqueta «Vencido» y fila resaltada; filtro «Plazo» con la opción «Solo vencidos» (`/ui/tickets?overdue=1`).
+- Limitación conocida: «hoy» se calcula en UTC, no en hora de Madrid.

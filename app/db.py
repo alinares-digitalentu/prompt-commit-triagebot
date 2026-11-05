@@ -2,7 +2,7 @@ import json
 import os
 import sqlite3
 from contextlib import closing
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 DEFAULT_DATABASE_URL = "sqlite:///./triagebot.db"
 URL_PREFIX = "sqlite:///"
@@ -64,14 +64,30 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("DROP TABLE tickets_old")
 
 
+# Días de plazo por prioridad: P1 vence hoy mismo, P2 mañana, P3 en dos días.
+DEADLINE_DAYS = {"P1": 0, "P2": 1, "P3": 2}
+DATE_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+OPEN_STATUSES = ("open", "in_progress")
+
+
 def _now() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def compute_due_at(created_at: str, priority: str) -> str:
+    """Fin del día (UTC) en que vence el ticket: creación + plazo de su prioridad."""
+    created = datetime.strptime(created_at, DATE_FORMAT)
+    due_day = created.date() + timedelta(days=DEADLINE_DAYS[priority])
+    return f"{due_day.isoformat()}T23:59:59Z"
 
 
 def _row_to_ticket(row: sqlite3.Row) -> dict:
     ticket = dict(row)
     ticket["tags"] = json.loads(ticket["tags"])
     ticket["assignees"] = json.loads(ticket["assignees"])
+    ticket["due_at"] = compute_due_at(ticket["created_at"], ticket["priority"])
+    # Vencido: sigue abierto (no resuelto ni cerrado) y ya pasó su fecha límite.
+    ticket["overdue"] = ticket["status"] in OPEN_STATUSES and _now() > ticket["due_at"]
     return ticket
 
 
@@ -112,6 +128,7 @@ def list_tickets(
     priority: str | None = None,
     status: str | None = None,
     assignee: str | None = None,
+    overdue: bool | None = None,
 ) -> list[dict]:
     """Lista tickets (más recientes primero); los filtros se combinan con AND."""
     filters = {"category": category, "priority": priority, "status": status}
@@ -127,6 +144,8 @@ def list_tickets(
     if assignee is not None:  # sin distinguir mayúsculas (SQLite lower() solo cubre ASCII)
         wanted = assignee.strip().casefold()
         tickets = [t for t in tickets if wanted in {a.casefold() for a in t["assignees"]}]
+    if overdue is not None:
+        tickets = [t for t in tickets if t["overdue"] == overdue]
     return tickets
 
 

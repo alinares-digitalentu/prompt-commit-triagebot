@@ -76,7 +76,7 @@
       <h2 id="tablero" class="mb-3 text-lg font-semibold">Tickets</h2>
       <form id="filtros" hx-get="/ui/tickets" hx-target="#tabla" hx-trigger="change"
             hx-indicator="#tabla"
-            class="mb-4 grid grid-cols-2 items-end gap-3 md:grid-cols-5">
+            class="mb-4 grid grid-cols-2 items-end gap-3 md:grid-cols-6">
         <div>
           <label for="x-category" class="label">Categoría</label>
           <select id="x-category" name="category" class="field">
@@ -96,6 +96,13 @@
           <select id="x-status" name="status" class="field">
             <option value="">Todos</option>
             {% for value in statuses %}<option value="{{ value }}">{{ L.status[value] }}</option>{% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="x-overdue" class="label">Plazo</label>
+          <select id="x-overdue" name="overdue" class="field">
+            <option value="">Todos</option>
+            <option value="1">Solo vencidos</option>
           </select>
         </div>
         <div class="col-span-2 md:col-span-1">
