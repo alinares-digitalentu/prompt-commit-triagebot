@@ -69,6 +69,12 @@ def list_tickets(
     )
 
 
+@app.get("/tickets/stats")
+def tickets_stats() -> dict:
+    """Conteos por categoría, prioridad y estado (SPEC §9.8)."""
+    return db.ticket_stats()
+
+
 @app.exception_handler(RequestValidationError)
 async def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     """422 sin devolver el valor recibido (`input`): puede no ser serializable (SPEC §9.7)."""

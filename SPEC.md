@@ -338,3 +338,18 @@ Marta pide que un ticket pueda tener **varios responsables** y poder **filtrar e
 
 - Un texto (`title`, `description` o un nombre de `assignees`) que no se pueda codificar en UTF-8 (por ejemplo un surrogate suelto como `"\ud800"`) → `422`. Nunca `500`.
 - Un `ticket_id` fuera del rango de enteros de SQLite (mayor que 2^63-1) en `PATCH /tickets/{id}` o en la edición de fila de la interfaz se trata como un ticket que no existe: `404` en la API y mensaje «no existe» en la tabla. Nunca `500`.
+- **Doble envío (checklist QA, escenario 7):** dos `POST /tickets` iguales crean dos tickets (son peticiones distintas; la API no deduplica). Para evitar el doble clic, el botón «Crear ticket» se desactiva mientras la petición está en curso.
+
+### 9.8 Estadísticas: `GET /tickets/stats` (Slack de Marta)
+
+Solo JSON, sin pantalla. Devuelve conteos de **todos** los tickets:
+
+```json
+{"total": 47,
+ "by_category": {"bug": 18, "feature_request": 0, "question": 0, "urgent": 0},
+ "by_priority": {"P1": 5, "P2": 0, "P3": 0},
+ "by_status": {"open": 30, "in_progress": 0, "resolved": 0, "closed": 0}}
+```
+
+- Cada mapa incluye **todos** los valores posibles del enum, con `0` si no hay tickets (así quien consume el JSON no debe adivinar claves).
+- Sin tickets: `total` 0 y todos los conteos a 0. Solo lectura; no recibe parámetros.

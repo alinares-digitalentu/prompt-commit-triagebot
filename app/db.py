@@ -4,6 +4,8 @@ import sqlite3
 from contextlib import closing
 from datetime import UTC, datetime
 
+from app.models import ALLOWED_CATEGORIES, ALLOWED_PRIORITIES
+
 DEFAULT_DATABASE_URL = "sqlite:///./triagebot.db"
 URL_PREFIX = "sqlite:///"
 
@@ -135,6 +137,20 @@ def list_tickets(
         wanted = assignee.strip().casefold()
         tickets = [t for t in tickets if wanted in {a.casefold() for a in t["assignees"]}]
     return tickets
+
+
+def ticket_stats() -> dict:
+    """Conteos de todos los tickets por categoría, prioridad y estado, con ceros (SPEC §9.8)."""
+    tickets = list_tickets()
+    keys = {
+        "by_category": ("category", sorted(ALLOWED_CATEGORIES)),
+        "by_priority": ("priority", sorted(ALLOWED_PRIORITIES)),
+        "by_status": ("status", ["open", "in_progress", "resolved", "closed"]),
+    }
+    stats: dict = {"total": len(tickets)}
+    for name, (field, values) in keys.items():
+        stats[name] = {value: sum(t[field] == value for t in tickets) for value in values}
+    return stats
 
 
 def update_ticket(ticket_id: int, changes: dict) -> dict | None:
