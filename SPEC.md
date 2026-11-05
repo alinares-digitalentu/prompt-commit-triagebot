@@ -306,3 +306,28 @@ Idioma de la interfaz: **español**. Estilos con Tailwind CDN y HTMX por CDN con
    - Prioridad y estado son selectores editables en la propia fila; al cambiarlos se guarda al instante.
    - Orden: el más reciente primero.
 
+
+### 9.5 Cambio de Marta A: varios responsables por ticket
+
+Marta pide que un ticket pueda tener **varios responsables** y poder **filtrar el tablero por responsable**.
+
+**Modelo**
+
+- Nuevo campo `assignees: list[str]` en el ticket. Por defecto `[]` (sin asignar).
+- Los responsables son **nombres libres** (no hay login ni tabla de usuarios: está fuera de alcance del BRIEF).
+- Cada nombre: se recorta (trim), de 1 a 50 caracteres. Un nombre vacío o de solo espacios → `422`.
+- Sin duplicados: se comparan sin distinguir mayúsculas/minúsculas (`casefold`) y se conserva la primera aparición y el orden.
+- Máximo **5** responsables por ticket (tras eliminar duplicados). Más de 5 → `422`.
+- SQLite: columna `assignees TEXT NOT NULL DEFAULT '[]'` con JSON, igual que `tags`. Si la base de datos ya existía sin esa columna, se añade al abrir la conexión (`ALTER TABLE ... ADD COLUMN`), sin perder datos.
+
+**API**
+
+- `POST /tickets` acepta `assignees` **opcional**.
+- `PATCH /tickets/{id}` acepta `assignees` además de `status` y `priority`. La lista enviada **reemplaza** a la actual; `[]` quita a todos. Debe venir al menos uno de los tres campos; `{}` sigue siendo `422`.
+- `updated_at` cambia solo si la lista cambia de verdad (tras normalizar). Repetir la misma lista no lo toca. Cambiar solo las mayúsculas de un nombre (`Ana` → `ana`) cuenta como cambio, porque cambia el nombre que se muestra.
+- `GET /tickets?assignee=<nombre>` devuelve los tickets en los que ese nombre figura entre los responsables. Coincidencia exacta, sin distinguir mayúsculas/minúsculas. Se combina con `AND` con el resto de filtros. `assignee` vacío → `422`. Un nombre que no existe devuelve `[]`.
+
+**Interfaz** (se implementa cuando exista el tablero, §9.4)
+
+- Nueva columna «Responsables» en la tabla.
+- Nuevo filtro «Responsable» junto a los otros tres, con la opción «Todos».

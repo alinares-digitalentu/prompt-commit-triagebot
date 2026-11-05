@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import Body, FastAPI, Form, HTTPException, Request
+from fastapi import Body, FastAPI, Form, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -25,6 +25,7 @@ from app.models import (
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="TriageBot")
+ASSIGNEES_ERROR = "Responsables no válidos: máximo 5, de 1 a 50 caracteres cada uno."
 templates = Jinja2Templates(directory=Path(__file__).resolve().parent.parent / "templates")
 
 
@@ -41,7 +42,9 @@ def _classify_and_save(payload: TicketCreate) -> dict:
         logger.warning("Clasificador fallido (%s); se aplica el fallback", type(exc).__name__)
         classification = copy.deepcopy(classifier.FALLBACK_CLASSIFICATION)
 
-    return db.create_ticket(payload.title, payload.description, classification)
+    return db.create_ticket(
+        payload.title, payload.description, classification, payload.assignees
+    )
 
 
 @app.post("/tickets", status_code=201, response_model=Ticket)
@@ -55,14 +58,17 @@ def list_tickets(
     category: Category | None = None,
     priority: Priority | None = None,
     status: Status | None = None,
+    assignee: Annotated[str | None, Query(min_length=1)] = None,
 ) -> list[dict]:
-    """Lista tickets filtrando por categoría, prioridad y estado (AND)."""
-    return db.list_tickets(category=category, priority=priority, status=status)
+    """Lista tickets filtrando por categoría, prioridad, estado y responsable (AND)."""
+    return db.list_tickets(
+        category=category, priority=priority, status=status, assignee=assignee
+    )
 
 
 @app.patch("/tickets/{ticket_id}", response_model=Ticket)
 def update_ticket(ticket_id: int, payload: Annotated[dict, Body()]) -> dict:
-    """Actualiza status y/o priority. El 404 se comprueba antes que el 422."""
+    """Actualiza status, priority y/o assignees. El 404 se comprueba antes que el 422."""
     if db.get_ticket(ticket_id) is None:
         raise HTTPException(status_code=404, detail="Ticket not found")
     try:
@@ -75,14 +81,25 @@ def update_ticket(ticket_id: int, payload: Annotated[dict, Body()]) -> dict:
     return ticket
 
 
-def _clean_filters(category: str, priority: str, status: str) -> dict[str, str | None]:
+def _clean_filters(
+    category: str, priority: str, status: str, assignee: str = ""
+) -> dict[str, str | None]:
     """Convierte los filtros del formulario ('' = Todas) y descarta valores fuera del enum."""
     allowed = {
         "category": (category, ALLOWED_CATEGORIES),
         "priority": (priority, ALLOWED_PRIORITIES),
         "status": (status, ALLOWED_STATUSES),
     }
-    return {name: (value if value in valid else None) for name, (value, valid) in allowed.items()}
+    filters = {
+        name: (value if value in valid else None) for name, (value, valid) in allowed.items()
+    }
+    filters["assignee"] = assignee.strip() or None
+    return filters
+
+
+def _parse_assignees(text: str) -> list[str]:
+    """'Ana, Luis,, ' -> ['Ana', 'Luis']. La validación (máx. 5, 1-50) la hace el modelo."""
+    return [name.strip() for name in text.split(",") if name.strip()]
 
 
 def _render_table(
@@ -116,10 +133,14 @@ def index(request: Request) -> HTMLResponse:
 
 @app.get("/ui/tickets", response_class=HTMLResponse)
 def ui_list_tickets(
-    request: Request, category: str = "", priority: str = "", status: str = ""
+    request: Request,
+    category: str = "",
+    priority: str = "",
+    status: str = "",
+    assignee: str = "",
 ) -> HTMLResponse:
     """Tabla filtrada para HTMX."""
-    return _render_table(request, _clean_filters(category, priority, status))
+    return _render_table(request, _clean_filters(category, priority, status, assignee))
 
 
 @app.post("/ui/tickets", response_class=HTMLResponse)
@@ -127,16 +148,23 @@ def ui_create_ticket(
     request: Request,
     title: Annotated[str, Form()] = "",
     description: Annotated[str, Form()] = "",
+    assignees: Annotated[str, Form()] = "",
     category: Annotated[str, Form()] = "",
     priority: Annotated[str, Form()] = "",
     status: Annotated[str, Form()] = "",
+    assignee: Annotated[str, Form()] = "",
 ) -> HTMLResponse:
     """Crea un ticket desde el formulario y devuelve la tabla (con el mensaje si hay error)."""
-    filters = _clean_filters(category, priority, status)
+    filters = _clean_filters(category, priority, status, assignee)
     try:
-        payload = TicketCreate(title=title, description=description)
-    except ValidationError:
-        error = "El título (1-200) y la descripción (1-5000) son obligatorios."
+        payload = TicketCreate(
+            title=title, description=description, assignees=_parse_assignees(assignees)
+        )
+    except ValidationError as exc:
+        if any("assignees" in error["loc"] for error in exc.errors()):
+            error = ASSIGNEES_ERROR
+        else:
+            error = "El título (1-200) y la descripción (1-5000) son obligatorios."
         return _render_table(request, filters, error)
     _classify_and_save(payload)
     return _render_table(request, filters)
@@ -148,16 +176,23 @@ def ui_update_ticket(
     ticket_id: int,
     new_status: Annotated[str, Form()] = "",
     new_priority: Annotated[str, Form()] = "",
+    new_assignees: Annotated[str | None, Form()] = None,
     category: Annotated[str, Form()] = "",
     priority: Annotated[str, Form()] = "",
     status: Annotated[str, Form()] = "",
+    assignee: Annotated[str, Form()] = "",
 ) -> HTMLResponse:
-    """Actualiza estado y/o prioridad desde la fila de la tabla."""
-    filters = _clean_filters(category, priority, status)
-    changes = {"status": new_status or None, "priority": new_priority or None}
+    """Actualiza estado, prioridad y/o responsables desde la fila de la tabla."""
+    filters = _clean_filters(category, priority, status, assignee)
+    changes: dict = {"status": new_status or None, "priority": new_priority or None}
+    changes = {k: v for k, v in changes.items() if v}
+    if new_assignees is not None:  # campo enviado (aunque vacío = quitar a todos)
+        changes["assignees"] = _parse_assignees(new_assignees)
     try:
-        update = TicketUpdate.model_validate({k: v for k, v in changes.items() if v})
-    except ValidationError:
+        update = TicketUpdate.model_validate(changes)
+    except ValidationError as exc:
+        if any("assignees" in error["loc"] for error in exc.errors()):
+            return _render_table(request, filters, ASSIGNEES_ERROR)
         return _render_table(request, filters, "Valor no válido para estado o prioridad.")
     if db.update_ticket(ticket_id, update.model_dump(exclude_none=True)) is None:
         return _render_table(request, filters, f"El ticket {ticket_id} no existe.")
