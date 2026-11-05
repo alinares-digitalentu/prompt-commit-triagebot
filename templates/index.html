@@ -22,6 +22,8 @@
                class="w-full rounded border border-slate-300 px-3 py-2">
         <textarea name="description" maxlength="5000" required rows="3" placeholder="Descripción"
                   class="w-full rounded border border-slate-300 px-3 py-2"></textarea>
+        <input name="assignees" placeholder="Responsables (separados por comas, opcional)"
+               aria-label="Responsables" class="w-full rounded border border-slate-300 px-3 py-2">
         <button type="submit" hx-disabled-elt="this"
                 class="rounded bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700
                        disabled:opacity-50">
@@ -45,6 +47,8 @@
           <option value="">Estado: Todas</option>
           {% for value in statuses %}<option value="{{ value }}">{{ value }}</option>{% endfor %}
         </select>
+        <input name="assignee" aria-label="Responsable" placeholder="Responsable: Todos"
+               class="rounded border border-slate-300 px-2 py-1">
       </form>
 
       <div id="tabla">{% include "_tickets_table.html" %}</div>

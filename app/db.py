@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS tickets (
     category TEXT NOT NULL CHECK (category IN ('bug','feature_request','question','urgent')),
     priority TEXT NOT NULL CHECK (priority IN ('P1','P2','P3')),
     tags TEXT NOT NULL DEFAULT '[]',
+    assignees TEXT NOT NULL DEFAULT '[]',
     status TEXT NOT NULL DEFAULT 'open'
         CHECK (status IN ('open','in_progress','resolved','closed')),
     created_at TEXT NOT NULL,
@@ -35,6 +36,10 @@ def get_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(_db_path())
     conn.row_factory = sqlite3.Row
     conn.execute(SCHEMA)
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(tickets)")}
+    if "assignees" not in columns:  # base de datos anterior al cambio de Marta A
+        conn.execute("ALTER TABLE tickets ADD COLUMN assignees TEXT NOT NULL DEFAULT '[]'")
+        conn.commit()
     _migrate(conn)
     return conn
 
@@ -51,9 +56,9 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE tickets RENAME TO tickets_old")
         conn.execute(SCHEMA)
         conn.execute(
-            "INSERT INTO tickets (id, title, description, category, priority, tags, status,"
-            " created_at, updated_at, status_changed_at)"
-            " SELECT id, title, description, category, priority, tags, status,"
+            "INSERT INTO tickets (id, title, description, category, priority, tags, assignees,"
+            " status, created_at, updated_at, status_changed_at)"
+            " SELECT id, title, description, category, priority, tags, assignees, status,"
             " created_at, updated_at, updated_at FROM tickets_old"
         )
         conn.execute("DROP TABLE tickets_old")
@@ -66,23 +71,27 @@ def _now() -> str:
 def _row_to_ticket(row: sqlite3.Row) -> dict:
     ticket = dict(row)
     ticket["tags"] = json.loads(ticket["tags"])
+    ticket["assignees"] = json.loads(ticket["assignees"])
     return ticket
 
 
-def create_ticket(title: str, description: str, classification: dict) -> dict:
+def create_ticket(
+    title: str, description: str, classification: dict, assignees: list[str] | None = None
+) -> dict:
     now = _now()
     with closing(get_connection()) as conn:
         with conn:  # commit o rollback
             cur = conn.execute(
                 "INSERT INTO tickets (title, description, category, priority, tags,"
-                " status, created_at, updated_at, status_changed_at)"
-                " VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?)",
+                " assignees, status, created_at, updated_at, status_changed_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?, ?)",
                 (
                     title,
                     description,
                     classification["category"],
                     classification["priority"],
                     json.dumps(classification["tags"]),
+                    json.dumps(assignees or []),
                     now,
                     now,
                     now,
@@ -102,6 +111,7 @@ def list_tickets(
     category: str | None = None,
     priority: str | None = None,
     status: str | None = None,
+    assignee: str | None = None,
 ) -> list[dict]:
     """Lista tickets (más recientes primero); los filtros se combinan con AND."""
     filters = {"category": category, "priority": priority, "status": status}
@@ -113,16 +123,21 @@ def list_tickets(
     query += " ORDER BY created_at DESC, id DESC"
     with closing(get_connection()) as conn:
         rows = conn.execute(query, tuple(active.values())).fetchall()
-    return [_row_to_ticket(row) for row in rows]
+    tickets = [_row_to_ticket(row) for row in rows]
+    if assignee is not None:  # sin distinguir mayúsculas (SQLite lower() solo cubre ASCII)
+        wanted = assignee.strip().casefold()
+        tickets = [t for t in tickets if wanted in {a.casefold() for a in t["assignees"]}]
+    return tickets
 
 
 def update_ticket(ticket_id: int, changes: dict) -> dict | None:
-    """Actualiza status/priority. `updated_at` solo cambia si algún valor cambia de verdad."""
+    """Actualiza status/priority/assignees. `updated_at` solo cambia si algo cambia de verdad."""
     with closing(get_connection()) as conn:
         row = conn.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,)).fetchone()
         if row is None:
             return None
-        real_changes = {k: v for k, v in changes.items() if row[k] != v}
+        current = _row_to_ticket(row)
+        real_changes = {k: v for k, v in changes.items() if current[k] != v}
         if real_changes:
             now = _now()
             # `status_changed_at` ("en este estado desde") solo cambia si cambia el estado.
@@ -130,10 +145,13 @@ def update_ticket(ticket_id: int, changes: dict) -> dict | None:
             if "status" in real_changes:
                 stamped["status_changed_at"] = now
             assignments = ", ".join(f"{column} = ?" for column in stamped)
+            values = [
+                json.dumps(v) if column == "assignees" else v for column, v in stamped.items()
+            ]
             with conn:  # commit o rollback
                 conn.execute(
                     f"UPDATE tickets SET {assignments} WHERE id = ?",
-                    (*stamped.values(), ticket_id),
+                    (*values, ticket_id),
                 )
             row = conn.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,)).fetchone()
     return _row_to_ticket(row)

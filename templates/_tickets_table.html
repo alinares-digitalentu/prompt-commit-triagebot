@@ -20,6 +20,7 @@
       <th class="px-3 py-2 text-left text-sm font-semibold">Categoría</th>
       <th class="px-3 py-2 text-left text-sm font-semibold">Prioridad</th>
       <th class="px-3 py-2 text-left text-sm font-semibold">Estado</th>
+      <th class="px-3 py-2 text-left text-sm font-semibold">Responsables</th>
       <th class="px-3 py-2 text-left text-sm font-semibold">En este estado desde</th>
       <th class="px-3 py-2 text-left text-sm font-semibold">Etiquetas</th>
       <th class="px-3 py-2 text-left text-sm font-semibold">Creado</th>
@@ -60,7 +61,13 @@
         </button>
         {% endif %}
       </td>
-      <td class="px-3 py-2 text-sm text-slate-600">{{ ticket.status_changed_at }}</td>
+      <td class="px-3 py-2 text-sm">
+        <input name="new_assignees" value="{{ ticket.assignees | join(', ') }}"
+               aria-label="Responsables del ticket {{ ticket.id }}" placeholder="Sin asignar"
+               hx-post="/ui/tickets/{{ ticket.id }}" hx-trigger="change" hx-target="#tabla"
+               hx-include="closest tr, #filtros"
+               class="w-44 rounded border border-slate-300 px-2 py-0.5 text-xs">
+      </td>
       <td class="px-3 py-2 text-sm text-slate-600">{{ ticket.tags | join(", ") }}</td>
       <td class="px-3 py-2 text-sm text-slate-600">{{ ticket.created_at }}</td>
     </tr>
