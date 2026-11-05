@@ -20,6 +20,7 @@
       <th class="px-3 py-2 text-left text-sm font-semibold">Categoría</th>
       <th class="px-3 py-2 text-left text-sm font-semibold">Prioridad</th>
       <th class="px-3 py-2 text-left text-sm font-semibold">Estado</th>
+      <th class="px-3 py-2 text-left text-sm font-semibold">En este estado desde</th>
       <th class="px-3 py-2 text-left text-sm font-semibold">Etiquetas</th>
       <th class="px-3 py-2 text-left text-sm font-semibold">Creado</th>
     </tr>
@@ -47,17 +48,25 @@
                 hx-post="/ui/tickets/{{ ticket.id }}" hx-trigger="change" hx-target="#tabla"
                 hx-include="closest tr, #filtros"
                 class="rounded border border-slate-300 px-2 py-0.5 text-xs">
-          {% for value in ["open", "in_progress", "closed"] %}
+          {% for value in statuses %}
           <option value="{{ value }}" {{ "selected" if ticket.status == value }}>{{ value }}</option>
           {% endfor %}
         </select>
+        {% if ticket.status in ["resolved", "closed"] %}
+        <button type="button" hx-post="/ui/tickets/{{ ticket.id }}" hx-vals='{"new_status": "open"}'
+                hx-target="#tabla" hx-include="#filtros"
+                class="ml-1 rounded border border-blue-300 px-2 py-0.5 text-xs text-blue-700 hover:bg-blue-50">
+          Reabrir
+        </button>
+        {% endif %}
       </td>
+      <td class="px-3 py-2 text-sm text-slate-600">{{ ticket.status_changed_at }}</td>
       <td class="px-3 py-2 text-sm text-slate-600">{{ ticket.tags | join(", ") }}</td>
       <td class="px-3 py-2 text-sm text-slate-600">{{ ticket.created_at }}</td>
     </tr>
     {% else %}
     <tr>
-      <td colspan="7" class="px-3 py-6 text-center text-sm text-slate-500">No hay tickets.</td>
+      <td colspan="8" class="px-3 py-6 text-center text-sm text-slate-500">No hay tickets.</td>
     </tr>
     {% endfor %}
   </tbody>
