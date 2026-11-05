@@ -367,3 +367,8 @@ Marta pide que un ticket pueda tener **varios responsables** y poder **filtrar e
 - Las claves de cada desglose son **siempre todos** los valores del enum, con `0` si no hay tickets; así la forma es estable (la usará el agente del Día 3).
 - Cada desglose suma `total`. Sin frontend: solo JSON.
 - La ruta se declara antes que `GET /tickets/{ticket_id}` para que `stats` no se tome por un id.
+
+### 9.8 Textos con Unicode inválido (QA, escenario 3)
+
+- Un texto (`title`, `description` o un nombre de `assignees`) que no se pueda codificar en UTF-8 (por ejemplo un surrogate suelto como `"\ud800"`) → `422`. Nunca `500`. Los emojis y los caracteres no latinos válidos se guardan con normalidad.
+- El cuerpo del `422` no incluye el valor recibido (`input`), porque puede no ser serializable.
