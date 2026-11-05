@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS tickets (
     assignees TEXT NOT NULL DEFAULT '[]',
     status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','in_progress','closed')),
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    status_changed_at TEXT NOT NULL
 )
 """
 
@@ -38,7 +39,28 @@ def get_connection() -> sqlite3.Connection:
     if "assignees" not in columns:  # base de datos anterior al cambio de Marta A
         conn.execute("ALTER TABLE tickets ADD COLUMN assignees TEXT NOT NULL DEFAULT '[]'")
         conn.commit()
+    _migrate(conn)
     return conn
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Reconstruye la tabla de una BD antigua (sin `resolved` ni `status_changed_at`).
+
+    SQLite no permite modificar un CHECK existente, así que se recrea la tabla.
+    """
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(tickets)")}
+    if "status_changed_at" in columns:
+        return
+    with conn:
+        conn.execute("ALTER TABLE tickets RENAME TO tickets_old")
+        conn.execute(SCHEMA)
+        conn.execute(
+            "INSERT INTO tickets (id, title, description, category, priority, tags, status,"
+            " created_at, updated_at, status_changed_at)"
+            " SELECT id, title, description, category, priority, tags, status,"
+            " created_at, updated_at, updated_at FROM tickets_old"
+        )
+        conn.execute("DROP TABLE tickets_old")
 
 
 def _now() -> str:
@@ -60,8 +82,8 @@ def create_ticket(
         with conn:  # commit o rollback
             cur = conn.execute(
                 "INSERT INTO tickets (title, description, category, priority, tags,"
-                " assignees, status, created_at, updated_at)"
-                " VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?)",
+                " status, created_at, updated_at, status_changed_at)"
+                " VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?)",
                 (
                     title,
                     description,
@@ -69,6 +91,7 @@ def create_ticket(
                     classification["priority"],
                     json.dumps(classification["tags"]),
                     json.dumps(assignees or []),
+                    now,
                     now,
                     now,
                 ),
@@ -115,14 +138,16 @@ def update_ticket(ticket_id: int, changes: dict) -> dict | None:
         current = _row_to_ticket(row)
         real_changes = {k: v for k, v in changes.items() if current[k] != v}
         if real_changes:
-            assignments = ", ".join(f"{column} = ?" for column in real_changes)
-            values = [
-                json.dumps(v) if column == "assignees" else v for column, v in real_changes.items()
-            ]
+            now = _now()
+            # `status_changed_at` ("en este estado desde") solo cambia si cambia el estado.
+            stamped = {**real_changes, "updated_at": now}
+            if "status" in real_changes:
+                stamped["status_changed_at"] = now
+            assignments = ", ".join(f"{column} = ?" for column in stamped)
             with conn:  # commit o rollback
                 conn.execute(
-                    f"UPDATE tickets SET {assignments}, updated_at = ? WHERE id = ?",
-                    (*values, _now(), ticket_id),
+                    f"UPDATE tickets SET {assignments} WHERE id = ?",
+                    (*stamped.values(), ticket_id),
                 )
             row = conn.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,)).fetchone()
     return _row_to_ticket(row)

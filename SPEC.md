@@ -24,9 +24,10 @@ Campos mínimos:
 | `category` | str | `bug`, `feature_request`, `question`, `urgent` |
 | `priority` | str | `P1`, `P2`, `P3` |
 | `tags` | list[str] | Lista, puede estar vacía |
-| `status` | str | `open`, `in_progress`, `closed` |
+| `status` | str | `open`, `in_progress`, `resolved`, `closed` |
 | `created_at` | datetime | UTC, generado en servidor |
 | `updated_at` | datetime | UTC, actualizado en cambios relevantes |
+| `status_changed_at` | datetime | UTC, «en este estado desde»: se fija al crear y cambia solo cuando cambia `status` |
 
 Valores por defecto:
 
@@ -129,7 +130,7 @@ Solo se pueden cambiar `status` y `priority`. El resto de campos son inmutables 
 }
 ```
 
-- `status`: `open`, `in_progress`, `closed`
+- `status`: `open`, `in_progress`, `resolved`, `closed`
 - `priority`: `P1`, `P2`, `P3`
 
 Errores:
@@ -251,7 +252,7 @@ Los tests comprueban:
 
 - Admite `status`, `priority` o ambos. **Debe venir al menos uno**: `{}` devuelve `422`.
 - Cualquier otro campo (`title`, `category`, etc.) devuelve `422`, porque son inmutables.
-- Se puede reabrir un ticket cerrado (`closed` → `open`).
+- Se puede reabrir un ticket `resolved` o `closed` (→ `open`). Cualquier transición entre estados es válida.
 - Orden de comprobación: `404` (el ticket no existe) antes que `422`.
 
 **Endpoints HTML para HTMX** (separados de la API JSON bajo el prefijo `/ui`, para que los endpoints JSON sigan devolviendo siempre JSON):
