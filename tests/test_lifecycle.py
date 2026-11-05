@@ -159,3 +159,33 @@ def test_old_database_is_migrated_without_losing_tickets(db_path, client):
     assert patched.status_code == 200
     assert patched.json()["status"] == "resolved"
     assert _create(client)["id"] == tickets[0]["id"] + 1
+
+
+def test_migration_keeps_assignees_of_a_database_already_migrated_for_them(db_path, client):
+    old = sqlite3.connect(db_path)
+    old.execute(
+        """CREATE TABLE tickets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL,
+            category TEXT NOT NULL,
+            priority TEXT NOT NULL,
+            tags TEXT NOT NULL DEFAULT '[]',
+            assignees TEXT NOT NULL DEFAULT '[]',
+            status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','in_progress','closed')),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )"""
+    )
+    old.execute(
+        "INSERT INTO tickets (title, description, category, priority, tags, assignees, status,"
+        " created_at, updated_at) VALUES ('Viejo', 'd', 'bug', 'P1', '[]', '[\"Ana\", \"Iker\"]',"
+        " 'open', '2026-01-01T09:00:00Z', '2026-01-02T09:00:00Z')"
+    )
+    old.commit()
+    old.close()
+
+    ticket = client.get("/tickets").json()[0]
+
+    assert ticket["assignees"] == ["Ana", "Iker"]
+    assert ticket["status_changed_at"] == "2026-01-02T09:00:00Z"
