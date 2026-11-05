@@ -343,3 +343,10 @@ Marta pide que un ticket pueda tener **varios responsables** y poder **filtrar e
 - `GET /tickets?overdue=true` devuelve solo los vencidos y `overdue=false` solo los demás. Un valor que no sea booleano devuelve `422`. Se combina con el resto de filtros mediante **AND**.
 - Tablero: columna «Vence» con la fecha, etiqueta «Vencido» y fila resaltada; filtro «Plazo» con la opción «Solo vencidos» (`/ui/tickets?overdue=1`).
 - Limitación conocida: «hoy» se calcula en UTC, no en hora de Madrid.
+
+### 9.6 Tickets duplicados (QA, escenario 7)
+
+- No puede haber dos tickets **no cerrados** con el mismo título y la misma descripción. Se comparan sin distinguir mayúsculas y sin contar espacios ni saltos de línea repetidos.
+- `POST /tickets` devuelve `409` con `{"detail": "Ya existe un ticket igual (#N)"}` y no crea nada. En la web se muestra ese mensaje en la tabla.
+- La comprobación ocurre **antes** de llamar a la IA (no se gastan tokens) y de nuevo, de forma atómica, al insertar: dos peticiones idénticas simultáneas crean un único ticket.
+- Los tickets `closed` no cuentan: si un problema ya cerrado reaparece, se puede registrar de nuevo. Los `resolved` sí cuentan (pueden reabrirse).

@@ -37,7 +37,14 @@ def health() -> dict[str, str]:
 
 
 def _classify_and_save(payload: TicketCreate) -> dict:
-    """Clasifica (con fallback si la IA falla) y guarda el ticket."""
+    """Clasifica (con fallback si la IA falla) y guarda el ticket.
+
+    Lanza DuplicateTicketError si ya existe uno igual; se comprueba antes de llamar a la IA
+    para no gastar tokens en un ticket que se va a rechazar.
+    """
+    duplicate_id = db.find_duplicate(payload.title, payload.description)
+    if duplicate_id is not None:
+        raise db.DuplicateTicketError(duplicate_id)
     try:
         classification = classifier.classify_ticket(payload.title, payload.description)
     except Exception as exc:
@@ -51,8 +58,14 @@ def _classify_and_save(payload: TicketCreate) -> dict:
 
 @app.post("/tickets", status_code=201, response_model=Ticket)
 def create_ticket(payload: TicketCreate) -> dict:
-    """Crea un ticket, lo clasifica y lo guarda. Si la IA falla, usa el fallback."""
-    return _classify_and_save(payload)
+    """Crea un ticket, lo clasifica y lo guarda. Si la IA falla, usa el fallback.
+
+    `409` si ya existe un ticket no cerrado con el mismo título y descripción.
+    """
+    try:
+        return _classify_and_save(payload)
+    except db.DuplicateTicketError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.get("/tickets", response_model=list[Ticket])
@@ -181,7 +194,10 @@ def ui_create_ticket(
         else:
             error = "El título (1-200) y la descripción (1-5000) son obligatorios."
         return _render_table(request, filters, error)
-    _classify_and_save(payload)
+    try:
+        _classify_and_save(payload)
+    except db.DuplicateTicketError as exc:
+        return _render_table(request, filters, f"{exc}. No se ha creado otro.")
     return _render_table(request, filters)
 
 
