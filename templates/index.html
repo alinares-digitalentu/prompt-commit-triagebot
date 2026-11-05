@@ -8,11 +8,47 @@
   <script src="https://unpkg.com/htmx.org@2.0.4"></script>
 </head>
 <body class="bg-slate-50 text-slate-900">
-  <main class="mx-auto max-w-6xl p-6">
-    <h1 class="text-3xl font-bold">TriageBot</h1>
-    <p class="mt-2 text-slate-600">Tablero de incidencias con clasificación automática por IA.</p>
+  <main class="mx-auto max-w-6xl space-y-6 p-6">
+    <header>
+      <h1 class="text-3xl font-bold">TriageBot</h1>
+      <p class="mt-2 text-slate-600">Tablero de incidencias con clasificación automática por IA.</p>
+    </header>
 
-    <!-- TODO: formulario + filtros + tabla HTMX -->
+    <section class="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200">
+      <h2 class="mb-3 text-lg font-semibold">Nuevo ticket</h2>
+      <form hx-post="/ui/tickets" hx-target="#tabla" hx-include="#filtros"
+            hx-on::after-request="if (event.detail.successful) this.reset()" class="space-y-3">
+        <input name="title" maxlength="200" required placeholder="Título"
+               class="w-full rounded border border-slate-300 px-3 py-2">
+        <textarea name="description" maxlength="5000" required rows="3" placeholder="Descripción"
+                  class="w-full rounded border border-slate-300 px-3 py-2"></textarea>
+        <button type="submit" hx-disabled-elt="this"
+                class="rounded bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700
+                       disabled:opacity-50">
+          Crear ticket
+        </button>
+      </form>
+    </section>
+
+    <section>
+      <form id="filtros" hx-get="/ui/tickets" hx-target="#tabla" hx-trigger="change"
+            class="mb-3 flex flex-wrap gap-3">
+        <select name="category" aria-label="Categoría" class="rounded border border-slate-300 px-2 py-1">
+          <option value="">Categoría: Todas</option>
+          {% for value in categories %}<option value="{{ value }}">{{ value }}</option>{% endfor %}
+        </select>
+        <select name="priority" aria-label="Prioridad" class="rounded border border-slate-300 px-2 py-1">
+          <option value="">Prioridad: Todas</option>
+          {% for value in priorities %}<option value="{{ value }}">{{ value }}</option>{% endfor %}
+        </select>
+        <select name="status" aria-label="Estado" class="rounded border border-slate-300 px-2 py-1">
+          <option value="">Estado: Todas</option>
+          {% for value in statuses %}<option value="{{ value }}">{{ value }}</option>{% endfor %}
+        </select>
+      </form>
+
+      <div id="tabla">{% include "_tickets_table.html" %}</div>
+    </section>
   </main>
 </body>
 </html>

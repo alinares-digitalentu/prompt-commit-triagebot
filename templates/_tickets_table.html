@@ -1,16 +1,64 @@
-<table class="min-w-full divide-y divide-slate-200 bg-white shadow-sm ring-1 ring-slate-200 rounded-lg overflow-hidden">
+{% set category_colors = {
+  "bug": "bg-red-100 text-red-800",
+  "feature_request": "bg-blue-100 text-blue-800",
+  "question": "bg-slate-200 text-slate-800",
+  "urgent": "bg-orange-100 text-orange-800"
+} %}
+{% set priority_colors = {
+  "P1": "bg-red-600 text-white",
+  "P2": "bg-amber-400 text-slate-900",
+  "P3": "bg-slate-200 text-slate-800"
+} %}
+{% if error %}
+<p role="alert" class="mb-3 rounded border border-red-300 bg-red-50 px-3 py-2 text-red-800">{{ error }}</p>
+{% endif %}
+<table class="min-w-full divide-y divide-slate-200 overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-slate-200">
   <thead class="bg-slate-100">
     <tr>
       <th class="px-3 py-2 text-left text-sm font-semibold">ID</th>
       <th class="px-3 py-2 text-left text-sm font-semibold">Título</th>
       <th class="px-3 py-2 text-left text-sm font-semibold">Categoría</th>
       <th class="px-3 py-2 text-left text-sm font-semibold">Prioridad</th>
-      <th class="px-3 py-2 text-left text-sm font-semibold">Tags</th>
       <th class="px-3 py-2 text-left text-sm font-semibold">Estado</th>
+      <th class="px-3 py-2 text-left text-sm font-semibold">Etiquetas</th>
       <th class="px-3 py-2 text-left text-sm font-semibold">Creado</th>
     </tr>
   </thead>
-  <tbody id="tickets-table-body">
-    <!-- TODO: renderizar tickets con Jinja2 -->
+  <tbody id="tickets-table-body" class="divide-y divide-slate-100">
+    {% for ticket in tickets %}
+    <tr>
+      <td class="px-3 py-2 text-sm">{{ ticket.id }}</td>
+      <td class="px-3 py-2 text-sm">{{ ticket.title }}</td>
+      <td class="px-3 py-2 text-sm">
+        <span class="rounded px-2 py-0.5 text-xs font-medium {{ category_colors[ticket.category] }}">{{ ticket.category }}</span>
+      </td>
+      <td class="px-3 py-2 text-sm">
+        <select name="new_priority" aria-label="Prioridad del ticket {{ ticket.id }}"
+                hx-post="/ui/tickets/{{ ticket.id }}" hx-trigger="change" hx-target="#tabla"
+                hx-include="closest tr, #filtros"
+                class="rounded px-2 py-0.5 text-xs font-bold {{ priority_colors[ticket.priority] }}">
+          {% for value in ["P1", "P2", "P3"] %}
+          <option value="{{ value }}" {{ "selected" if ticket.priority == value }}>{{ value }}</option>
+          {% endfor %}
+        </select>
+      </td>
+      <td class="px-3 py-2 text-sm">
+        <select name="new_status" aria-label="Estado del ticket {{ ticket.id }}"
+                hx-post="/ui/tickets/{{ ticket.id }}" hx-trigger="change" hx-target="#tabla"
+                hx-include="closest tr, #filtros"
+                class="rounded border border-slate-300 px-2 py-0.5 text-xs">
+          {% for value in ["open", "in_progress", "closed"] %}
+          <option value="{{ value }}" {{ "selected" if ticket.status == value }}>{{ value }}</option>
+          {% endfor %}
+        </select>
+      </td>
+      <td class="px-3 py-2 text-sm text-slate-600">{{ ticket.tags | join(", ") }}</td>
+      <td class="px-3 py-2 text-sm text-slate-600">{{ ticket.created_at }}</td>
+    </tr>
+    {% else %}
+    <tr>
+      <td colspan="7" class="px-3 py-6 text-center text-sm text-slate-500">No hay tickets.</td>
+    </tr>
+    {% endfor %}
   </tbody>
 </table>
